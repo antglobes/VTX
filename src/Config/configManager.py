@@ -19,9 +19,10 @@ class Config:
 
         self.updater = ConfigUpdater()
         self.deepl = {}
-        self.buzz = {}
+        self.att = {}
         self.sys_vars = {}
         self.langs = {}
+        self.timezones = {}
 
 
 
@@ -34,10 +35,11 @@ class Config:
             match section:
                 case 'DeepL':
                     self.deepl = self.get_section(section)
-                case 'Buzz':
-                    self.buzz = self.get_section(section)
+                case 'ATT':
+                    self.att = self.get_section(section)
                 case 'System':
                     self.sys_vars = self.get_section(section)
+
 
     def write(self):
         with open(self.config_path, 'w') as config_file:
@@ -46,6 +48,9 @@ class Config:
 
     def load_langs(self):
         self.langs = utils.load_json_file(self.files_folder + '/ISO_639-1_langs.json')
+
+    def load_timezones(self):
+        self.timezones = utils.load_json_file(self.files_folder + '/timezones.json')
 
     def read(self):
         self.updater.read(self.config_path)
@@ -77,7 +82,7 @@ class Config:
         return self.get_icon('app')
 
     def get_default_lang(self):
-        return self.buzz['lang_to'].capitalize()
+        return self.att['lang_to'].capitalize()
 
     def get_langs(self):
         langs = []
@@ -87,32 +92,25 @@ class Config:
         return langs
 
     def get_default_model(self):
-        return self.buzz['model']
+        return self.att['model']
 
     @staticmethod
     def get_models():
-        return ['Whisper', 'Whisper.cpp', 'Faster Whisper']
-
-    def get_default_model_size(self):
-        return self.buzz['size']
-
-    @staticmethod
-    def get_model_sizes():
-        return ['Tiny', 'Base', 'Small', 'Medium', 'Large']
+        return ['tiny', 'base', 'small', 'medium', 'large-v1', 'large-v2']
 
     def get_default_task_type(self):
-        return self.buzz['task']
+        return self.att['task']
 
     @staticmethod
     def get_task_types():
         return ['Transcribe', 'Translate']
 
     def get_default_out_fmt(self):
-        return self.buzz['out_file']
+        return self.att['out_file']
 
     @staticmethod
     def get_output_format():
-        return ['txt', 'srt', 'vtt']
+        return ['txt', 'srt', 'vtt', 'json', 'tsv']
 
 
     def get_deep_lang_from(self):
@@ -121,26 +119,35 @@ class Config:
     def get_deep_lang_to(self):
         return self.deepl['lang_to'].capitalize()
 
-    def change_setting(self, section, option, val):
+    def get_timezone(self):
+        return self.timezones[self.get_setting('System', 'Zone').capitalize()]
+
+    def change_setting(self, section, option, val, typ=None):
+        if isinstance(val, list):
+            val = str(val)
+            val = val[2:len(val)-2]
         match section:
             case 'DeepL':
                 if option == 'API_KEY':
-                    print('first section')
-                    self.updater[section][option].value = utils.file_to_api_key(val)
-
+                    if typ == 'file':
+                        self.updater[section][option].value = utils.file_to_api_key(val)
+                    elif typ == 'env':
+                        self.updater[section][option].value = val
+                elif option == 'LANG_FROM' or 'LANG_TO':
+                    self.updater[section][option].value = val
+            case 'ATT' | 'System':
+                self.updater[section][option].value = val
 
 
         self.write()
         self.load()
 
     def get_setting(self, section, option):
+        option = option.lower()
         match section:
             case 'DeepL':
                 return self.deepl[option]
-            case 'Buzz':
-                return self.buzz[option]
+            case 'ATT':
+                return self.att[option]
             case 'System':
                 return self.sys_vars[option]
-
-
-
