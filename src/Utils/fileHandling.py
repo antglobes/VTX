@@ -79,3 +79,7 @@ def get_translation_results(save_dir, job):
 
 def file_exists(path):
     return Path(path).exists()
+
+
+def valid_path_format(path):
+    return Path(path).is_file() or Path(path).is_dir()

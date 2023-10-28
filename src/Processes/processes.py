@@ -14,6 +14,57 @@ def job_complete_num(finished: int, total: int) -> None:
     print(f"{finished} of {total} tasks are complete")
 
 
+class JobManager:
+    def __init__(self, config, settings):
+        self.config = config
+        self.settings = settings
+        self.scheduler = JobScheduler(self.config)
+        self.job = None
+
+    @staticmethod
+    def run_condition(job):
+        if not (job.is_job_complete() and job.is_active()) and job.is_details_full() and job.is_details_non_null():
+            return True
+        return False
+
+    def load_deepl_settings(self, job):
+        job.add('API_KEY', self.settings.get_setting('API_KEY'))
+
+    def load_system_settings(self, job):
+        job.add('GAMEDATA', self.settings.get_setting('GAMEDATA'))
+        job.add('SAVE_DIR', self.settings.get_setting('SAVE_DIR'))
+        job.add('XML_BASE', self.settings.get_setting('XML_BASE'))
+
+    def build_additional_details(self, job):
+        self.load_deepl_settings(job)
+        self.load_system_settings(job)
+        return job
+
+    def create_new_job(self):
+        self.job = Job()
+        return self.build_additional_details(self.job)
+
+    def remove_job(self):
+        self.job = None
+
+    def check_run_condition(self):
+        if not self.run_condition(self.job):
+            return False, 'Failed to create new job'
+        return True, 'Creating a new job'
+
+    def start_job(self):
+        self.job.set_status(True)
+        self.scheduler.schedule_job(self.job)
+        self.scheduler.start_job()
+        self.scheduler.run_scheduler()
+
+    def display_active(self):
+        pass
+
+    def display_log(self):
+        pass
+
+
 class JobScheduler:
     def __init__(self, config):
         self.scheduler = Scheduler(job_complete_num)
@@ -21,34 +72,37 @@ class JobScheduler:
         self.results = {}
         self.job = None
 
+    def run_tasks(self, job):
+        job = self.sound_files_task(job)
+        job = self.att_task(job)
+        job, results = self.xml_task(job)
+        job.set_status(False)
+        return results
+
     def schedule_job(self, job):
-        self.scheduler.add(target=self.schedule_job,
+        self.scheduler.add(target=self.run_tasks,
                            args=job,
                            subtasks=10,
                            process_type=process.BaseProcess,
                            queue_type=queues.Queue)
         self.job = job
 
-    async def start_job(self, job):
-        self.results[job.id] = await self.scheduler.run()
+    async def start_job(self):
+        self.results[self.job.id] = await self.scheduler.run()
+        self.cleanup()
 
     def run_scheduler(self):
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(self.start_job(self.job))
-
+        loop.run_until_complete(self.start_job())
 
     def cancel_jobs(self):
         self.scheduler.terminate()
 
-
-    def run_tasks(self, job):
-        job = self.sound_files_task(job)
-        job = self.att_task(job)
-        job, results = self.xml_task(job)
-        self.cleanup(job)
-        return results
-
-
+    def cleanup(self):
+        if not self.job.is_active() and self.job.is_job_complete():
+            for i in range(len(self.job.details)):
+                self.job.details[i] = None
+            self.job = None
 
     def sound_files_task(self, job):
         gamedata_folder = self.config.get_setting('System', 'GAMEDATA')
@@ -144,11 +198,10 @@ class JobScheduler:
 
 
 class Job:
-    def __init__(self, settings):
+    def __init__(self):
         self.details = {}
-        self.details_full = False
+        self.details_full = None
         self.complete = False
-        self.settings = settings
         self.active = False
         self.id = None
 
@@ -156,60 +209,32 @@ class Job:
         return self.complete
 
     def is_details_full(self):
-        if len(self.details) == 9:
+        if len(self.details) == 8:
             self.details_full = True
         else:
             self.details_full = False
         return self.details_full
 
-    def set_id(self, val):
-        self.id = val
-
-    def get_id(self):
-        return self.id
-
-    def set_status(self, status):
-        self.active = status
+    def is_details_non_null(self):
+        for value in self.details.values():
+            if value is None:
+                return False
+        return True
 
     def is_active(self):
         return self.active
 
+    def set_id(self, val):
+        self.id = val
+
+    def set_status(self, status):
+        self.active = status
+
+    def get_id(self):
+        return self.id
+
     def get_details(self, key):
         return self.details[key]
 
-    def load_deepl_details(self):
-        self.details['API_KEY'] = self.settings.get_setting('API_KEY')
-
-    def load_system_details(self):
-        self.details['GAMEDATA'] = self.settings.get_setting('GAMEDATA')
-        self.details['SAVE_DIR'] = self.settings.get_setting('SAVE_DIR')
-        self.details['XML_BASE'] = self.settings.get_setting('XML_BASE')
-
-    def build_additional_details(self):
-        self.load_deepl_details()
-        self.load_system_details()
-
-    def verify_details(self):
-        if len(self.details) <= 0:
-            return False
-
-        for value in self.details.values():
-            if value is None:
-                return False
-
-        if len(self.details) == 9:
-            return True
-
     def add(self, key, value):
         self.details[key] = value
-
-
-class JobManager:
-    def __init__(self):
-        pass
-
-    def display_active(self):
-        pass
-
-    def display_log(self):
-        pass

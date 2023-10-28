@@ -1,11 +1,11 @@
 import sys
 import traceback
 
-import Utils.log
+from Utils.fileHandling import valid_path_format
 from GUI.views import MainMenu as mm
 from GUI.views import JobsMenu as jm
 from GUI.views import SettingsMenu as sm
-from Processes.processes import Job
+from Processes.processes import Job, JobScheduler, JobManager
 from Utils.log import LoggingUtilities as log
 from Config.configManager import Config as cfg
 
@@ -18,11 +18,12 @@ class Main:
         self.theme = sg.theme('DarkBrown7')  # lightbrown8
         self.logger = log()
         self.config = cfg(self.logger)
-        self.jobs = jm(self.config)
+        self.jobs_menu = jm(self.config)
         self.settings = sm(self.config)
-        self.main_menu = mm(self.config, self.logger, self.jobs, self.settings)
+        self.main_menu = mm(self.config, self.logger, self.jobs_menu, self.settings)
         self.window_num = 0
         self.job = None
+        self.job_manager = JobManager(self.config, self.settings)
 
     @staticmethod
     def hide_window(window: sg.Window, hide: bool):
@@ -36,6 +37,7 @@ class Main:
         if event == f'MAIN_MENU_EXIT_BUTTON{suffix}':
             return 'Exit'
         elif event == f'MAIN_MENU_JOBS_BUTTON{suffix}':
+            self.job = self.job_manager.create_new_job()
             response = self.run_jobs_menu(suffix)
         elif event == f'MAIN_MENU_SETTINGS_BUTTON{suffix}':
             response = self.run_settings_menu(suffix)
@@ -43,8 +45,7 @@ class Main:
         return response
 
     def run_jobs_menu(self, suffix):
-        window = self.jobs.create_new_window(suffix)
-        self.job = Job(self.settings)
+        window = self.jobs_menu.create_new_window(suffix)
         response = None
         running = True
         while running:
@@ -54,8 +55,8 @@ class Main:
                 case None:
                     continue
                 case 'Back' | 'Exit':
-                    if not self.job.is_active():
-                        self.job = None
+                    self.job_manager.remove_job()
+                    self.job = None
                     running = False
 
         return response
@@ -92,13 +93,13 @@ class Main:
 
         # Sound Filenames
         elif event == f'JOBS_MENU_FILE_SELECT_BUTTON{suffix}':
-            file = self.jobs.select_file()
+            file = self.jobs_menu.select_file()
             self.job.add('files', [file])
             window[f'JOBS_MENU_LIST_FILES_INPUT{suffix}'].update(file)
 
         # Sound Directories
         elif event == f'JOBS_MENU_LIST_DIRS_SELECT_BUTTON{suffix}':
-            folder = self.jobs.select_folder()
+            folder = self.jobs_menu.select_folder()
             self.job.add('files', [folder])
             window[f'JOBS_MENU_LIST_DIRS_INPUT{suffix}'].update(folder)
 
@@ -115,7 +116,10 @@ class Main:
 
         # Job Buttons
         elif event == f'JOBS_MENU_NEW_JOB_BUTTON{suffix}':
-            self.job_manager.add_to_broker()
+            cond, message = self.job_manager.check_run_condition()
+            sg.popup_ok(title=message, keep_on_top=True)
+            if cond:
+                self.job_manager.start_job()
 
         elif event == f'JOBS_MENU_VIEW_JOBS_BUTTON{suffix}':
             self.job_manager.display_active()
