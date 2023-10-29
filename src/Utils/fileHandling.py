@@ -1,6 +1,7 @@
 import datetime
 import os
 import json
+import uuid
 from pathlib import Path
 
 
@@ -43,7 +44,7 @@ def get_sound_files(gamedata_folder, target_folder, sound_files=None):
     for root, dirs, files in os.walk(Path(gamedata_folder)):
         for folder in target_folder:
             if root.endswith(folder):
-                sound_files.extend({folder: files})
+                sound_files.append({folder: [f'{root}\\{file}' for file in files]})
                 target_folder.remove(folder)
                 if len(target_folder) > 1 and len(target_folder) != 0:
                     get_sound_files(gamedata_folder, target_folder[1:], sound_files)
@@ -51,8 +52,16 @@ def get_sound_files(gamedata_folder, target_folder, sound_files=None):
     return sound_files
 
 
-def parse_files(files):
-    return files
+def parse_files(pattern, files):
+    parsed_files = []
+    for file in files:
+        file = Path(file).__str__()
+        new_file = []
+        for token in file.split("\\"):
+            if token not in pattern:
+                new_file.append(f"\\{token}")
+        parsed_files.append(''.join(new_file))
+    return parsed_files
 
 
 def lang_to_iso(lang_list, lang):
@@ -83,3 +92,7 @@ def file_exists(path):
 
 def valid_path_format(path):
     return Path(path).is_file() or Path(path).is_dir()
+
+
+def create_id():
+    return uuid.uuid4().__str__()

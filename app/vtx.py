@@ -5,7 +5,7 @@ from Utils.fileHandling import valid_path_format
 from GUI.views import MainMenu as mm
 from GUI.views import JobsMenu as jm
 from GUI.views import SettingsMenu as sm
-from Processes.processes import Job, JobScheduler, JobManager
+from Processes.processes import JobManager
 from Utils.log import LoggingUtilities as log
 from Config.configManager import Config as cfg
 
@@ -23,7 +23,7 @@ class Main:
         self.main_menu = mm(self.config, self.logger, self.jobs_menu, self.settings)
         self.window_num = 0
         self.job = None
-        self.job_manager = JobManager(self.config, self.settings)
+        self.job_manager = JobManager(self.config)
 
     @staticmethod
     def hide_window(window: sg.Window, hide: bool):
@@ -115,10 +115,11 @@ class Main:
             self.job.add('deepl_task', values[f'LISTBOX_TARG_LANG{suffix}'])
 
         # Job Buttons
-        elif event == f'JOBS_MENU_NEW_JOB_BUTTON{suffix}':
+        elif event == f'JOBS_MENU_START_JOB_BUTTON{suffix}':
             cond, message = self.job_manager.check_run_condition()
-            sg.popup_ok(title=message, keep_on_top=True)
+            sg.popup_ok(message, keep_on_top=True)
             if cond:
+                self.job_manager.fill_details(values, suffix)
                 self.job_manager.start_job()
 
         elif event == f'JOBS_MENU_VIEW_JOBS_BUTTON{suffix}':
@@ -200,7 +201,7 @@ class Main:
         #System Tab
         elif event == f'SETTINGS_GAMEDATA_BUTTON{suffix}':
             folder = self.settings.select_folder()
-            self.config.change_setting('System', 'GAMEDATA', folder)
+            self.config.change_setting('System', 'UNPACKED', folder)
 
         elif event == f'SETTINGS_SAVE_FOLDER_BUTTON{suffix}':
             folder = self.settings.select_folder()
@@ -208,6 +209,7 @@ class Main:
 
 
     def run(self):
+        sg.set_options("C:\\Program Files\\JetBrains\\PyCharm Community Edition 2022.3.1\\bin\\pycharm.bat")
         reload_window = False
 
         window = self.main_menu.create_new_window(suffix=f"_{self.window_num}")
@@ -239,8 +241,7 @@ class Main:
 
 
             except Exception as e:
-                sg.popup_error(e.with_traceback(traceback.print_exc(file=sys.stdout)),
-                               auto_close=True, auto_close_duration=0.01)
+                sg.popup_error_with_traceback(str(e))
                 continue
 
 
